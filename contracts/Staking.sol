@@ -1,83 +1,136 @@
 // SPDX-License-Identifier: MIT
+
 pragma solidity ^0.8.19;
 
-contract Staking {
-  struct Stake {
-    uint256 amount;
-    uint256 timestamp;
-  }
+import "@openzeppelin/contracts/utils/Context.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
-  mapping(address => Stake) public stakes;
-  address[] public stakers;
-  uint256 public totalStaked;
-  uint256 public rewardPool;
+contract Staking is Ownable {
+    using SafeMath for uint256;
+    using SafeERC20 for IERC20;
 
-  event Staked(address indexed staker, uint256 amount);
-  event Unstaked(address indexed staker, uint256 remainAmount, uint256 stakedAmount);
-  event RewardDistributed(address indexed staker, uint256 reward);
-
-  function stake() public payable{
-    require(msg.value > 0, "Must stake non-zero amount");
-
-    if(stakes[msg.sender].amount == 0) {
-      stakes[msg.sender] = Stake(msg.value, block.timestamp);
-      stakers[stakers.length] = msg.sender;
-    } else {
-      stakes[msg.sender].amount += msg.value;
-    }
-    totalStaked += msg.value;
-
-    emit Staked(msg.sender, msg.value);
-  }
-
-  function unstake(uint256 _amount) public {
-    require(stakes[msg.sender].amount > _amount, "No enough tokens to unstake");
-
-    stakes[msg.sender].amount -= _amount;
-    totalStaked -= _amount;
-
-    payable(msg.sender).transfer(_amount);
-
-    emit Unstaked(msg.sender, stakes[msg.sender].amount, _amount);
-  }
-
-  function distributeRewards() public {
-    for(uint256 i = 0; i < getAllStakers().length; i++) {
-      address staker = getAllStakers()[i];
-      uint256 reward = calculateReward(stakes[staker].amount, stakes[staker].timestamp);
-      if(reward > 0) {
-        stakes[staker].amount += reward;
-        rewardPool -= reward;
-        emit RewardDistributed(staker, reward);
-      }
-    }
-  }
-
-  function calculateReward(uint256 _amount, uint256 _timestamp) internal view returns (uint256) {
-    uint256 duration = block.timestamp - _timestamp;
-    uint256 rewardRate = 1;
-    return (_amount * duration * rewardRate) / (365 * 24 * 60 * 60 * 100);
-  }
-
-  function getAllStakers() internal view returns (address[] memory) {
-    uint256 stakerCount = 0;
-    for (uint256 i = 0; i < stakers.length; i++) {
-      if (stakes[stakers[i]].amount > 0) stakerCount += 1;
+    struct Deposits {
+        uint256 depositAmount;
+        uint256 depositTime;
+        uint256 endTime;
+        uint256 index;
+        uint256 reward;
+        bool paid;
     }
 
-    address[] memory activeStakers = new address[](stakerCount);
-    uint256 index = 0;
-    for (uint256 i = 0; i < stakers.length; i++) {
-      if (stakes[stakers[i]].amount > 0) {
-          activeStakers[index] = stakers[i];
-          index += 1;
-      }
+    struct Rates {
+        uint64 newInterestRate;
+        uint256 lockDuration;
+        uint256 timeStamp;
+        bool active;
     }
 
-    return activeStakers;
-  }
+    mapping(address => Deposits[]) private deposits;
+    Rates[] public rates;
 
-  receive() external payable {
-    rewardPool += msg.value;
-  }
+    address public tokenAddress;
+    uint256 public stakedBalance;
+    uint256 public rewardBalance;
+    uint256 public stakedTotal;
+    uint256 public totalReward;
+    uint64 public index;
+    string public name;
+    bool public isStopped;
+
+    IERC20 public mainToken;
+    IERC20 public jobToken;
+
+    event Staked(
+        address indexed token,
+        address indexed staker_,
+        uint256 stakedAmount
+    );
+
+    event PaidOut(
+        address indexed token,
+        address indexed staker_,
+        uint256 amount_,
+        uint256 reward_
+    );
+
+    event RatesChanged();
+
+    event RewardsAdded(uint256 rewards, uint256 time);
+
+    event StakingStopped(bool status, uint256 time);
+
+    constructor(
+        string memory name_,
+        address mainTokenAddress,
+        address jobTokenAddress,
+        uint64 rate_
+    ) Ownable() {
+        name = name_;
+        require(mainTokenAddress != address(0), "Zero token address");
+        require(jobTokenAddress != address(0), "Zero token address");
+        mainToken = IERC20(mainTokenAddress);
+        jobToken = IERC20(jobTokenAddress);
+        require(rate_ != 0, "Zero interest rate");
+        rates.push(Rates(rate_, block.timestamp, 2592000000, true));
+    }
+
+    function getRates() external view returns (Rates[] memory) {
+        return rates;
+    }
+
+    function setRateAndLockduration(uint64 rate_, uint256 _duration) external onlyOwner {
+        require(rate_ != 0, "Zero interest rate");
+        rates.push(Rates(rate_, block.timestamp, _duration, true));
+        emit RatesChanged();
+    }
+    
+    function removeRateAndLockduration(uint256 _index) external onlyOwner {
+        rates[_index].active = false;
+        emit RatesChanged();
+    }
+
+    function changeStakingStatus(bool _status) external onlyOwner {
+        isStopped = _status;
+        emit StakingStopped(_status, block.timestamp);
+    }
+
+    function userDeposits(
+        address user
+    ) 
+        external
+        view
+        returns (Deposits[] memory)
+    {
+        return deposits[user];
+    }
+
+    function stake(
+        uint256 _amount,
+        uint256 _index
+    ) 
+        external
+    {
+        require(!isStopped, "not staking period");
+        require(_amount > 0, "Cannot stake 0 tokens");
+        require(mainToken.transferFrom(msg.sender, address(this), _amount), "Staking failed");
+        Deposits memory newDeposit = Deposits(_amount, block.timestamp, block.timestamp.add(rates[_index].lockDuration), _index, calculateReward(_amount, rates[_index].newInterestRate), false);
+        deposits[msg.sender].push(newDeposit);
+        jobToken.transfer(msg.sender, _amount);
+    }
+
+    function unstake (uint256 _index) 
+        external
+    {
+        require(!deposits[msg.sender][_index].paid, "already unstaked");
+        require(block.timestamp > deposits[msg.sender][_index].endTime, "can't unstake yet");
+        mainToken.transfer(msg.sender, deposits[msg.sender][_index].reward);
+        deposits[msg.sender][_index].paid = true;
+    }
+
+    function calculateReward (uint256 _amount, uint64 _rate) private pure returns(uint256) {
+        return _amount.mul(100 + uint256(_rate)).div(100);
+    }
 }

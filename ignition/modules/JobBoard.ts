@@ -1,6 +1,6 @@
 import { buildModule } from "@nomicfoundation/hardhat-ignition/modules";
 
-const JobBoardModule = buildModule("JobBoard", (m) => {
+const JobBoardModule = buildModule("JobBoardModule", (m) => {
 	const jobBoard = m.contract("JobBoard");
 
 	return { jobBoard };
