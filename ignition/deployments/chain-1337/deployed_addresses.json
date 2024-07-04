@@ -1,6 +1,6 @@
 {
-  "JobBoardModule#JobBoard": "0xD34cf7Aa9db58A0b715B9d4c43e3F6918AaFa015",
-  "KataTokenModule#KataToken": "0x5A3817273b59a64dC62D866159e851A847933B7C",
-  "RewardTokenModule#RewardToken": "0xEe7df301232e5900b871B696c04855898C425995",
-  "StakingModule#Staking": "0x74f5136B95B15E3C60C938B6da38A949Bdfe7950"
+  "JobBoardModule#JobBoard": "0x5EEC2613D8677Ed4E38b2D524b19eEeBB58A1026",
+  "KataTokenModule#KataToken": "0x87ba1908c33eaccE553CE967Cb7E3faC2A18d12F",
+  "RewardTokenModule#RewardToken": "0x84A08862aE0d13C3C630a24374A94D1Da742e188",
+  "StakingModule#Staking": "0x9Efd2300589673F8715091e3104ee8a422C5258A"
 }
