@@ -74,7 +74,7 @@ contract Staking is Ownable {
         mainToken = IERC20(mainTokenAddress);
         jobToken = IERC20(jobTokenAddress);
         require(rate_ != 0, "Zero interest rate");
-        rates.push(Rates(rate_, block.timestamp, 2592000000, true));
+        rates.push(Rates(rate_, 2592000, block.timestamp, true));
         isStopped = false;
     }
 
@@ -82,18 +82,18 @@ contract Staking is Ownable {
         return rates;
     }
 
-    function setRateAndLockduration(uint64 rate_, uint256 _duration) external payable onlyOwner {
+    function setRateAndLockduration(uint64 rate_, uint256 _duration) external onlyOwner {
         require(rate_ != 0, "Zero interest rate");
-        rates.push(Rates(rate_, block.timestamp, _duration, true));
+        rates.push(Rates(rate_, _duration, block.timestamp, true));
         emit RatesChanged();
     }
     
-    function removeRateAndLockduration(uint256 _index) external payable onlyOwner {
+    function removeRateAndLockduration(uint256 _index) external onlyOwner {
         rates[_index].active = false;
         emit RatesChanged();
     }
 
-    function changeStakingStatus(bool _status) external payable onlyOwner {
+    function changeStakingStatus(bool _status) external onlyOwner {
         isStopped = _status;
         emit StakingStopped(_status, block.timestamp);
     }
@@ -112,18 +112,18 @@ contract Staking is Ownable {
         uint256 _amount,
         uint256 _index
     ) 
-        public
+        external
     {
         require(!isStopped, "not staking period");
         require(_amount > 0, "Cannot stake 0 tokens");
-        mainToken.transferFrom(msg.sender, address(mainToken), _amount);
+        mainToken.transferFrom(msg.sender, address(this), _amount);
         Deposits memory newDeposit = Deposits(_amount, block.timestamp, block.timestamp.add(rates[_index].lockDuration), _index, calculateReward(_amount, rates[_index].newInterestRate), false);
         deposits[msg.sender].push(newDeposit);
         jobToken.transfer(msg.sender, _amount);
     }
 
     function unstake (uint256 _index) 
-        public
+        external
     {
         require(!deposits[msg.sender][_index].paid, "already unstaked");
         require(block.timestamp > deposits[msg.sender][_index].endTime, "can't unstake yet");
