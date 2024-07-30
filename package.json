@@ -1,6 +1,6 @@
 {
 	"scripts": {
-		"deploy:localhost": "hardhat ignition deploy ./ignition/modules/JobBoard.ts --network localhost && hardhat ignition deploy ./ignition/modules/KataToken.ts --network localhost && hardhat ignition deploy ./ignition/modules/RewardToken.ts --network localhost && hardhat ignition deploy ./ignition/modules/Staking.ts --network localhost"
+		"deploy:localhost": "hardhat ignition deploy ./ignition/modules/KataToken.ts --network localhost && hardhat ignition deploy ./ignition/modules/RewardToken.ts --network localhost && hardhat ignition deploy ./ignition/modules/JobBoard.ts --network localhost && hardhat ignition deploy ./ignition/modules/Staking.ts --network localhost"
 	},
 	"devDependencies": {
 		"@nomicfoundation/hardhat-chai-matchers": "^2.0.0",
